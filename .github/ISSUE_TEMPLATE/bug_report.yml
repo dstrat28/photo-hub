@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a reproducible problem with Photo Hub.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remove credentials, email addresses, private photos, pairing tokens,
+        and identifying network details before submitting.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the expected and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest safe set of steps that reproduces the problem.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Photo Hub revision
+      placeholder: Commit SHA or release version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version, OS, and Raspberry Pi model if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: device
+    attributes:
+      label: Device details
+      description: For TV issues, include model family and firmware version.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed credentials, personal data, private photos, and identifying network details.
+          required: true

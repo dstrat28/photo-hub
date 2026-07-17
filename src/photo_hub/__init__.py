@@ -1,0 +1,1 @@
+"""Photo Hub application package."""

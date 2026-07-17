@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "photo-hub"
+version = "0.1.0"
+description = "A self-hosted photo delivery service for Aura Frames and Samsung The Frame."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+keywords = ["aura", "email", "raspberry-pi", "samsung-frame", "self-hosted"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+    "Pillow>=10.0.0",
+    "pillow-heif>=0.16.0",
+    "samsungtvws[async,cli]==3.0.4",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+photo-hub = "photo_hub.cli:main"
+photo-hub-tv-probe = "photo_hub.tv_probe:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/photo_hub"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

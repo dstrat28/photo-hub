@@ -1,0 +1,19 @@
+[Unit]
+Description=Photo Hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/photo-hub
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/pi/photo-hub/.venv/bin/photo-hub --config /home/pi/.config/photo-hub/config.json run
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

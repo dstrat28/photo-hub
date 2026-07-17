@@ -1,0 +1,27 @@
+{
+  "gmail": {
+    "email": "your-photo-hub-account@gmail.com",
+    "app_password": "replace-with-gmail-app-password",
+    "imap_host": "imap.gmail.com",
+    "imap_port": 993,
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 465
+  },
+  "allowed_senders": [
+    "you@example.com"
+  ],
+  "aura": {
+    "frame_email": "your-frame@auraframes.com"
+  },
+  "tv": {
+    "host": "192.168.1.50",
+    "enabled": true,
+    "client_name": "Frame TV",
+    "timeout_seconds": 30
+  },
+  "paths": {
+    "state_dir": "~/.local/state/photo-hub"
+  },
+  "poll_interval_seconds": 60,
+  "max_attachment_bytes": 25000000
+}

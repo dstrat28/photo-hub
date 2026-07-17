@@ -6,8 +6,8 @@ documentation improvements, and focused code changes are welcome.
 ## Before opening an issue
 
 - Search existing issues for the same behavior.
-- Do not include Gmail App Passwords, TV pairing tokens, email addresses,
-  private photos, or unredacted network traces.
+- Do not include Gmail App Passwords, email addresses,
+  private photos, or unredacted diagnostic output.
 - For a security vulnerability, follow `SECURITY.md` instead of opening a
   public issue.
 

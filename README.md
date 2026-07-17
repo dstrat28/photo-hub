@@ -7,7 +7,8 @@ It is designed for a small, trusted group of senders. Incoming images are
 normalized to metadata-stripped sRGB JPEGs before delivery.
 
 > [!IMPORTANT]
-> Photo Hub processes private photos and stores email and device credentials.
+> Photo Hub processes private photos and stores email credentials and device
+> state.
 > Run it only on a trusted host and network, keep the configuration file out of
 > source control, and use a dedicated Gmail account with an App Password.
 
@@ -144,19 +145,20 @@ sudo journalctl -u photo-hub.service -f
 ## TV compatibility probe
 
 Start with read-only checks, replacing the example address with the TV's local
-IP:
+IP. The probe uses the same direct Samsung Art connection on port `8001` as the
+service:
 
 ```bash
 uv run photo-hub-tv-probe --host 192.168.1.50 preflight
-uv run photo-hub-tv-probe --host 192.168.1.50 --homebridge-art status
+uv run photo-hub-tv-probe --host 192.168.1.50 status
 ```
 
 Upload, replacement, and cleanup commands are intentionally explicit:
 
 ```bash
-uv run photo-hub-tv-probe --host 192.168.1.50 --homebridge-art upload-first
-uv run photo-hub-tv-probe --host 192.168.1.50 --homebridge-art replace
-uv run photo-hub-tv-probe --host 192.168.1.50 --homebridge-art cleanup --confirm
+uv run photo-hub-tv-probe --host 192.168.1.50 upload
+uv run photo-hub-tv-probe --host 192.168.1.50 replace
+uv run photo-hub-tv-probe --host 192.168.1.50 cleanup --confirm
 ```
 
 Run upload commands only while the TV is already in Art Mode. The probe records

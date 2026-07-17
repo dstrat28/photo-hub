@@ -1,9 +1,8 @@
-"""Safe Samsung The Frame capability probe for the Photo Hub feasibility gate."""
+"""Safe Samsung The Frame compatibility checks for Photo Hub."""
 
 from __future__ import annotations
 
 import argparse
-import base64
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import json
@@ -13,10 +12,11 @@ import platform
 import re
 import shutil
 import socket
-import ssl
 import sys
 from typing import Any, Dict, Iterable, List, Optional
-import uuid
+
+
+ART_PORT = 8001
 
 
 class ProbeError(RuntimeError):
@@ -163,7 +163,7 @@ def render_probe_image(path: Path, sequence: int) -> None:
     draw.text((260, height - 410), "TEST IMAGE {}".format(sequence), fill=accent_color)
     draw.text(
         (260, height - 300),
-        "Created by the Photo Hub feasibility check. Safe to remove.",
+        "Created by the Photo Hub compatibility check. Safe to remove.",
         fill=(255, 255, 255),
     )
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -171,38 +171,17 @@ def render_probe_image(path: Path, sequence: int) -> None:
     os.chmod(path, 0o600)
 
 
-def connect_tv(host: str, port: int, token_file: Path, timeout: int) -> Any:
-    try:
-        from samsungtvws import SamsungTVWS
-    except ImportError as exc:
-        raise ProbeError(
-            "samsungtvws is not installed. Install the probe environment first."
-        ) from exc
-    token_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    return SamsungTVWS(
-        host=host,
-        port=port,
-        token_file=str(token_file),
-        timeout=timeout,
-    )
-
-
 def connect_art(args: argparse.Namespace) -> Any:
-    if args.homebridge_art:
-        try:
-            from samsungtvws.art import SamsungTVArt
-        except ImportError as exc:
-            raise ProbeError(
-                "samsungtvws Art client is not installed in the probe environment."
-            ) from exc
-        return SamsungTVArt(
-            host=args.host,
-            port=8001,
-            timeout=args.timeout,
-            name="Frame TV",
-        )
-    tv = connect_tv(args.host, args.port, args.token_file, args.timeout)
-    return tv.art()
+    try:
+        from samsungtvws.art import SamsungTVArt
+    except ImportError as exc:
+        raise ProbeError("samsungtvws is not installed.") from exc
+    return SamsungTVArt(
+        host=args.host,
+        port=ART_PORT,
+        timeout=args.timeout,
+        name="Frame TV",
+    )
 
 
 def close_tv(tv: Any) -> None:
@@ -255,14 +234,17 @@ def cmd_preflight(args: argparse.Namespace) -> None:
     usage = shutil.disk_usage(str(disk_path))
     print("  free_disk_mb: {}".format(round(usage.free / 1024 / 1024)))
     print("TV reachability from this host:")
-    for port in (8001, 8002):
-        reachable = False
-        try:
-            with socket.create_connection((args.host, port), timeout=args.timeout):
-                reachable = True
-        except OSError:
-            pass
-        print("  {}:{}: {}".format(args.host, port, "reachable" if reachable else "unreachable"))
+    reachable = False
+    try:
+        with socket.create_connection((args.host, ART_PORT), timeout=args.timeout):
+            reachable = True
+    except OSError:
+        pass
+    print(
+        "  {}:{}: {}".format(
+            args.host, ART_PORT, "reachable" if reachable else "unreachable"
+        )
+    )
 
 
 def read_tv_status(args: argparse.Namespace) -> Dict[str, Any]:
@@ -286,104 +268,6 @@ def cmd_status(args: argparse.Namespace) -> None:
     print("Art Mode supported: {}".format(status["supported"]))
     print("Current mode: {}".format(status["mode"]))
     print("Available artwork count: {}".format(status["available_count"]))
-    print("Token stored: {}".format(args.token_file.exists()))
-
-
-def cmd_pair(args: argparse.Namespace) -> None:
-    tv = connect_tv(args.host, args.port, args.token_file, args.timeout)
-    try:
-        tv.open()
-    finally:
-        close_tv(tv)
-    if not args.token_file.exists():
-        raise ProbeError(
-            "The TV connection opened but did not provide a persisted pairing token."
-        )
-    os.chmod(args.token_file, 0o600)
-    print("Samsung remote pairing token stored: {}".format(args.token_file))
-
-
-def redact_trace_payload(value: Any, token: Optional[str]) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: ("[redacted]" if key.lower() == "token" else redact_trace_payload(item, token))
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [redact_trace_payload(item, token) for item in value]
-    if isinstance(value, str) and token:
-        return value.replace(token, "[redacted]")
-    return value
-
-
-def cmd_trace_status(args: argparse.Namespace) -> None:
-    try:
-        import websocket
-    except ImportError as exc:
-        raise ProbeError("websocket-client is not installed in the probe environment.") from exc
-
-    token = None
-    if not args.without_token and args.token_file.exists():
-        token = args.token_file.read_text(encoding="utf-8").strip()
-    client_name = "Frame TV" if args.as_homebridge else args.client_name
-    encoded_name = base64.b64encode(client_name.encode("utf-8")).decode("ascii")
-    protocol = "wss" if args.port == 8002 else "ws"
-    query = "name={}".format(encoded_name)
-    if token:
-        query += "&token={}".format(token)
-    url = "{}://{}:{}/api/v2/channels/com.samsung.art-app?{}".format(
-        protocol, args.host, args.port, query
-    )
-    sslopt = {"cert_reqs": ssl.CERT_NONE} if args.port == 8002 else {}
-    print(
-        "Opening Art channel on port {} (token: {}).".format(
-            args.port, "present" if token else "omitted"
-        )
-    )
-    requests_sent = 0
-    connection = None
-    try:
-        connection = websocket.create_connection(url, timeout=args.timeout, sslopt=sslopt)
-        for _ in range(args.frames):
-            try:
-                raw = connection.recv()
-            except websocket.WebSocketTimeoutException:
-                print("Receive timed out while waiting for another Art event.")
-                return
-            frame = json.loads(raw)
-            redacted = redact_trace_payload(frame, token)
-            print("Event: {}".format(frame.get("event", "[missing]")))
-            print(json.dumps(redacted, sort_keys=True))
-            should_send = (
-                args.send_after_connect and frame.get("event") == "ms.channel.connect"
-            ) or (
-                not args.send_after_connect and frame.get("event") == "ms.channel.ready"
-            ) or (
-                args.retry_after_disconnect
-                and requests_sent > 0
-                and frame.get("event") == "ms.channel.clientDisconnect"
-            )
-            if should_send and requests_sent <= int(args.retry_after_disconnect):
-                request_data: Dict[str, str] = {"request": "get_artmode_status"}
-                if not args.as_homebridge:
-                    request_id = str(uuid.uuid4())
-                    request_data.update({"id": request_id, "request_id": request_id})
-                request = {
-                    "method": "ms.channel.emit",
-                    "params": {
-                        "event": "art_app_request",
-                        "to": "host",
-                        "data": json.dumps(request_data),
-                    },
-                }
-                connection.send(json.dumps(request))
-                requests_sent += 1
-                print("Sent read-only get_artmode_status request #{}.".format(requests_sent))
-    except (OSError, ValueError, websocket.WebSocketException) as exc:
-        raise ProbeError("Raw Art channel trace failed: {}".format(exc)) from exc
-    finally:
-        if connection is not None:
-            connection.close()
 
 
 def upload_probe_image(args: argparse.Namespace, sequence: int, state: ProbeState) -> str:
@@ -408,7 +292,7 @@ def upload_probe_image(args: argparse.Namespace, sequence: int, state: ProbeStat
         close_tv(art)
 
 
-def cmd_upload_first(args: argparse.Namespace) -> None:
+def cmd_upload(args: argparse.Namespace) -> None:
     state = load_state(args.state_file)
     if state.owned_content_ids:
         raise ProbeError(
@@ -416,8 +300,8 @@ def cmd_upload_first(args: argparse.Namespace) -> None:
             "no new image was uploaded."
         )
     content_id = upload_probe_image(args, 1, state)
-    print("Uploaded and displayed first probe image: {}".format(content_id))
-    print("Restart this command-line session, then run status to validate persisted pairing.")
+    print("Uploaded and displayed probe image: {}".format(content_id))
+    print("Run status to confirm that the TV reports the image as current artwork.")
 
 
 def cmd_replace(args: argparse.Namespace) -> None:
@@ -470,72 +354,26 @@ def cmd_cleanup(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     default_state_dir = Path("~/.local/state/photo-hub/tv-probe").expanduser()
     parser = argparse.ArgumentParser(
-        description="Validate Samsung The Frame automation without interrupting viewing."
+        description="Check Samsung The Frame compatibility without interrupting viewing."
     )
     parser.add_argument("--host", required=True, help="TV IPv4 address on the Pi's LAN.")
-    parser.add_argument(
-        "--port",
-        type=int,
-        choices=(8001, 8002),
-        default=8002,
-        help="Samsung control port; use 8001 if the TV exposes legacy Art WebSocket support.",
-    )
-    parser.add_argument(
-        "--homebridge-art",
-        action="store_true",
-        help="Use the working Frame TV Art identity on uncredentialed port 8001.",
-    )
     parser.add_argument(
         "--state-dir",
         type=Path,
         default=default_state_dir,
-        help="Private directory for probe state and token.",
+        help="Private directory for probe state and generated images.",
     )
     parser.add_argument("--timeout", type=int, default=10)
     subcommands = parser.add_subparsers(dest="command", required=True)
     subcommands.add_parser("preflight", help="Report Pi suitability and TV port reachability.")
+    subcommands.add_parser("status", help="Read Art Mode status without changing the TV.")
     subcommands.add_parser(
-        "pair",
-        help="Request a persisted TV pairing token without sending remote-control actions.",
-    )
-    subcommands.add_parser("status", help="Pair/read Art Mode status without changing the TV.")
-    trace = subcommands.add_parser(
-        "trace-status",
-        help="Trace redacted Art-channel events and optionally issue a read-only status request.",
-    )
-    trace.add_argument(
-        "--without-token",
-        action="store_true",
-        help="Open Art channel without including the stored Samsung pairing token.",
-    )
-    trace.add_argument(
-        "--send-after-connect",
-        action="store_true",
-        help="Issue read-only status after channel connect instead of waiting for channel ready.",
-    )
-    trace.add_argument(
-        "--retry-after-disconnect",
-        action="store_true",
-        help="Retry status once on the same connection after it evicts a stale client.",
-    )
-    trace.add_argument(
-        "--client-name",
-        default="SamsungTvRemote",
-        help="Art-channel client name shown to the TV.",
-    )
-    trace.add_argument(
-        "--as-homebridge",
-        action="store_true",
-        help="Use the Frame TV client name and bare status payload from homebridge-samsung-tizen.",
-    )
-    trace.add_argument("--frames", type=int, default=4)
-    subcommands.add_parser(
-        "upload-first",
-        help="Upload and display probe image 1 only when the TV is already in Art Mode.",
+        "upload",
+        help="Upload and display a test image only when the TV is already in Art Mode.",
     )
     subcommands.add_parser(
         "replace",
-        help="Display probe image 2 and delete the recorded image 1 only.",
+        help="Replace the recorded test image and delete only that prior image.",
     )
     cleanup = subcommands.add_parser("cleanup", help="Delete remaining probe-owned images.")
     cleanup.add_argument("--confirm", action="store_true")
@@ -547,13 +385,10 @@ def main() -> None:
     args = parser.parse_args()
     args.state_dir = args.state_dir.expanduser()
     args.state_file = args.state_dir / "probe-state.json"
-    args.token_file = args.state_dir / "tv-token.txt"
     commands = {
         "preflight": cmd_preflight,
-        "pair": cmd_pair,
         "status": cmd_status,
-        "trace-status": cmd_trace_status,
-        "upload-first": cmd_upload_first,
+        "upload": cmd_upload,
         "replace": cmd_replace,
         "cleanup": cmd_cleanup,
     }

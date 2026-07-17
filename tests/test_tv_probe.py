@@ -1,15 +1,19 @@
 import json
+import sys
+from types import ModuleType
 
 import pytest
 
 from photo_hub.tv_probe import (
+    ART_PORT,
     ProbeError,
     ProbeState,
+    build_parser,
+    connect_art,
     confirm_current_image,
     extract_content_id,
     interpret_art_mode,
     load_state,
-    redact_trace_payload,
     require_active_art_mode,
     save_state,
 )
@@ -82,8 +86,45 @@ def test_confirms_selected_artwork_is_current():
         confirm_current_image(Art(), "MY-F0003")
 
 
-def test_trace_redaction_hides_pairing_token():
-    payload = {"data": {"token": "secret-token", "nested": "contains secret-token"}}
-    assert redact_trace_payload(payload, "secret-token") == {
-        "data": {"token": "[redacted]", "nested": "contains [redacted]"}
+@pytest.mark.parametrize("command", ["preflight", "status", "upload", "replace"])
+def test_parser_accepts_public_probe_commands(command):
+    args = build_parser().parse_args(["--host", "192.168.1.50", command])
+    assert args.command == command
+
+
+def test_parser_accepts_confirmed_cleanup():
+    args = build_parser().parse_args(
+        ["--host", "192.168.1.50", "cleanup", "--confirm"]
+    )
+    assert args.command == "cleanup"
+    assert args.confirm is True
+
+
+def test_connect_art_uses_the_direct_local_art_channel(monkeypatch):
+    captured = {}
+
+    class FakeArt:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    package = ModuleType("samsungtvws")
+    package.__path__ = []
+    art_module = ModuleType("samsungtvws.art")
+    art_module.SamsungTVArt = FakeArt
+    package.art = art_module
+    monkeypatch.setitem(sys.modules, "samsungtvws", package)
+    monkeypatch.setitem(sys.modules, "samsungtvws.art", art_module)
+    args = build_parser().parse_args(["--host", "192.168.1.50", "status"])
+
+    assert isinstance(connect_art(args), FakeArt)
+    assert captured == {
+        "host": "192.168.1.50",
+        "port": ART_PORT,
+        "timeout": 10,
+        "name": "Frame TV",
     }
+
+
+def test_status_parser_has_one_direct_connection_path():
+    args = build_parser().parse_args(["--host", "192.168.1.50", "status"])
+    assert set(vars(args)) == {"host", "state_dir", "timeout", "command"}

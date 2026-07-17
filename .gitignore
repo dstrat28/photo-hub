@@ -18,7 +18,6 @@ config.json
 *.sqlite3-*
 *.db
 *.db-*
-tv-token.txt
 probe-state.json
 probe-images/
 .DS_Store

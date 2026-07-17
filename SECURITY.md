@@ -15,7 +15,7 @@ not available, contact the repository maintainer privately using the contact
 method listed on their GitHub profile.
 
 Include a concise description, affected component, reproduction steps, and
-impact. Remove Gmail App Passwords, Samsung pairing tokens, email addresses,
+impact. Remove Gmail App Passwords, email addresses,
 private photos, and identifying network details from all reports.
 
 You should receive an acknowledgement within seven days. Please allow time for

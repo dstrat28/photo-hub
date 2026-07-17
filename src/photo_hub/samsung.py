@@ -1,4 +1,4 @@
-"""Samsung Frame Art delivery using the validated Homebridge-compatible channel."""
+"""Samsung Frame Art delivery over the direct local Art channel."""
 
 from __future__ import annotations
 

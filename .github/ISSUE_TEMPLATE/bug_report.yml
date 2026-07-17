@@ -6,8 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Remove credentials, email addresses, private photos, pairing tokens,
-        and identifying network details before submitting.
+        Remove credentials, email addresses, private photos, and identifying
+        network details before submitting.
   - type: textarea
     id: description
     attributes:

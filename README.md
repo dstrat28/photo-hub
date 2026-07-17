@@ -171,9 +171,6 @@ uv sync --locked --extra test
 uv run --frozen pytest
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and
-[SECURITY.md](SECURITY.md) for private vulnerability reporting.
-
 ## License
 
 Photo Hub is available under the [MIT License](LICENSE).

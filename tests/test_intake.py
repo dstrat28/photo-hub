@@ -16,14 +16,14 @@ def test_parse_destination_rejects_ambiguity():
         parse_destination("frame", "tv")
 
 
-def test_parse_submission_accepts_one_authorized_image():
+def test_parse_submission_accepts_one_authorized_image(sign_email):
     message = EmailMessage()
     message["From"] = "User <you@example.com>"
     message["Subject"] = "both"
     message.set_content("for the frames")
     message.add_attachment(b"fake-jpeg", maintype="image", subtype="jpeg", filename="photo.jpg")
 
-    submission = parse_submission(message, ["you@example.com"], 100)
+    submission = parse_submission(sign_email(message), ["you@example.com"], 100)
     assert submission.sender == "you@example.com"
     assert submission.destination == "both"
     assert submission.attachment.filename == "photo.jpg"
@@ -37,14 +37,14 @@ def test_parse_submission_rejects_unauthorized_sender():
     message.add_attachment(b"fake-jpeg", maintype="image", subtype="jpeg", filename="photo.jpg")
 
     with pytest.raises(IntakeError, match="not authorized"):
-        parse_submission(message, ["you@example.com"], 100)
+        parse_submission(message.as_bytes(), ["you@example.com"], 100)
 
 
-def test_parse_submission_requires_exactly_one_image():
+def test_parse_submission_requires_exactly_one_image(sign_email):
     message = EmailMessage()
     message["From"] = "you@example.com"
     message["Subject"] = "frame"
     message.set_content("x")
 
     with pytest.raises(IntakeError, match="exactly one"):
-        parse_submission(message, ["you@example.com"], 100)
+        parse_submission(sign_email(message), ["you@example.com"], 100)

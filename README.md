@@ -18,7 +18,7 @@ Google, Aura, or Samsung.
 ## Features
 
 - Accepts a single JPEG, PNG, TIFF, HEIC, or HEIF attachment by email.
-- Restricts submissions to configured sender addresses.
+- Restricts submissions to configured sender addresses with verified sender-domain DKIM.
 - Sends normalized photos to an Aura frame by email.
 - Queues photos for Samsung The Frame without interrupting ordinary viewing.
 - Keeps only the newest pending TV photo.
@@ -90,6 +90,28 @@ Required values:
 
 The Gmail account must be invited as a contributor to the Aura frame. If only
 Aura delivery is needed, set `tv.enabled` to `false`.
+
+Incoming mail must carry a valid RSA-SHA256 DKIM signature whose signing domain
+exactly matches the allowlisted `From` address's domain. Photo Hub verifies the
+original message bytes, including the photo and routing/MIME headers; it does
+not trust supplied `Authentication-Results` headers. The sender's mail provider
+must enforce which account can use that `From` address: DKIM authenticates the
+domain, while `allowed_senders` restricts the claimed mailbox within it. Unsigned,
+partially signed, tampered, or modified forwarded mail is rejected. Send directly
+from an allowlisted account with DKIM enabled; no subject token is needed.
+
+DKIM public keys are fetched through verified HTTPS from
+[Google Public DNS](https://developers.google.com/speed/public-dns/docs/doh/json),
+with a five-second lookup timeout and no client-subnet disclosure. The host needs
+outbound HTTPS access to `dns.google` and current trusted CA certificates.
+Temporary lookup failures leave the message pending for a later pass.
+
+Mail retrieval processes at most 25 messages and 64 MB of body data per pass,
+one message at a time. Complete messages are limited to 35 MB on the wire
+(including base64 and MIME overhead), independently of `max_attachment_bytes`.
+Oversized messages are recorded as rejected and archived without downloading
+their bodies. The Gmail IMAP and SMTP connections require valid certificates
+for their configured hostnames.
 
 Validate the configuration before starting the service:
 

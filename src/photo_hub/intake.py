@@ -7,6 +7,8 @@ from email.message import Message
 from email.utils import parseaddr
 from typing import Iterable, Optional
 
+from .authentication import AuthenticationError, authenticate_message
+
 
 VALID_DESTINATIONS = {"frame", "tv", "both"}
 IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/tiff", "image/heic", "image/heif"}
@@ -86,8 +88,10 @@ def image_attachments(message: Message) -> Iterable[Attachment]:
     for part in message.walk() if message.is_multipart() else [message]:
         if part.get_content_maintype() == "multipart":
             continue
+        if not is_image_part(part):
+            continue
         payload = part.get_payload(decode=True)
-        if payload is None or not is_image_part(part):
+        if payload is None:
             continue
         yield Attachment(
             filename=part.get_filename() or "photo",
@@ -97,13 +101,15 @@ def image_attachments(message: Message) -> Iterable[Attachment]:
 
 
 def parse_submission(
-    message: Message,
+    raw_message: bytes,
     allowed_senders: Iterable[str],
     max_attachment_bytes: int,
 ) -> Submission:
+    try:
+        message = authenticate_message(raw_message, allowed_senders)
+    except AuthenticationError as exc:
+        raise IntakeError(str(exc)) from exc
     sender = normalize_sender(message.get("From", ""))
-    if sender not in {item.lower() for item in allowed_senders}:
-        raise IntakeError("Sender is not authorized for Photo Hub.")
 
     subject = message.get("Subject", "")
     destination = parse_destination(subject, text_body(message))

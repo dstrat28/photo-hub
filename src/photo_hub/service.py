@@ -7,8 +7,9 @@ import time
 from typing import Optional
 
 from .config import AppConfig
+from .authentication import AuthenticationUnavailable
 from .images import normalize_jpeg, tv_canvas_jpeg
-from .intake import IntakeError, image_attachments, normalize_sender, parse_submission
+from .intake import IntakeError, is_image_part, normalize_sender, parse_submission
 from .mailbox import GmailMailbox, MailItem
 from .samsung import SamsungConfig, SamsungError, SamsungFrame
 from .store import PendingTVJob, Store
@@ -40,18 +41,24 @@ class PhotoHubService:
         for item in self.mail.unseen(self.store.max_processed_uid()):
             if self.store.has_processed(item.uid):
                 continue
-            self.process_mail(item)
+            try:
+                self.process_mail(item)
+            except AuthenticationUnavailable:
+                # Never advance the UID cursor beyond a message awaiting authentication.
+                break
         self.process_pending_tv()
 
     def process_mail(self, item: MailItem) -> None:
         try:
+            if item.rejection:
+                raise IntakeError(item.rejection)
             ignore_status = self.ignore_status(item)
             if ignore_status:
                 self.store.mark_processed(item.uid, ignore_status)
                 self.mail.mark_done(item.uid)
                 return
             submission = parse_submission(
-                item.message,
+                item.raw_message,
                 self.config.allowed_senders,
                 self.config.max_attachment_bytes,
             )
@@ -73,6 +80,8 @@ class PhotoHubService:
                     old_path.unlink()
             self.store.mark_processed(item.uid, "accepted")
             self.mail.mark_done(item.uid)
+        except AuthenticationUnavailable:
+            raise
         except IntakeError as exc:
             self.store.mark_processed(item.uid, "rejected", str(exc))
             self.mail.mark_done(item.uid)
@@ -85,7 +94,7 @@ class PhotoHubService:
         if sender == self.config.gmail.email.lower():
             return "ignored_self"
         if sender not in self.config.allowed_senders and not any(
-            image_attachments(item.message)
+            is_image_part(part) for part in item.message.walk()
         ):
             return "ignored_non_submission"
         return None

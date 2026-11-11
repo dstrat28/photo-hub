@@ -25,6 +25,8 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
 ]
 dependencies = [
+    "dkimpy>=1.1.8,<2",
+    "dnspython>=2.7,<3",
     "Pillow>=10.0.0",
     "pillow-heif>=0.16.0",
     "samsungtvws==3.0.4",
